@@ -1,16 +1,15 @@
-def CONTAINER_NAME = "calculator"
 def ENV_NAME = getEnvName(env.BRANCH_NAME)
+def CONTAINER_NAME = "calculator-"+ENV_NAME
 def CONTAINER_TAG = getTag(env.BUILD_NUMBER, env.BRANCH_NAME)
 def HTTP_PORT = getHTTPPort(env.BRANCH_NAME)
-def EMAIL_RECIPIENTS = "your_email@gmail.com"
-
+def EMAIL_RECIPIENTS = "oullmedacademy1@gmail.com"
 
 node {
     try {
         stage('Initialize') {
             def dockerHome = tool 'DockerLatest'
             def mavenHome = tool 'MavenLatest'
-            env.PATH = "${dockerHome}/bin:${mavenHome}/bin:${env.PATH}"
+            env.PATH = "/usr/bin:/bin:${env.PATH}:${mavenHome}/bin"
         }
 
         stage('Checkout') {
@@ -24,9 +23,16 @@ node {
 
         stage('Sonarqube Analysis') {
             withSonarQubeEnv('SonarQubeLocalServer') {
-                sh " mvn sonar:sonar -Dintegration-tests.skip=true -Dmaven.test.failure.ignore=true"
+                
+                sh '''
+                        mvn sonar:sonar \
+                        -Dsonar.host.url=http://sonarqube:9000 \
+                        -Dintegration-tests.skip=true \
+                        -Dmaven.test.failure.ignore=true
+                    '''
+
             }
-            timeout(time: 1, unit: 'MINUTES') {
+            timeout(time: 10, unit: 'MINUTES') {
                 def qg = waitForQualityGate() // Reuse taskId previously collected by withSonarQubeEnv
                 if (qg.status != 'OK') {
                     error "Pipeline aborted due to quality gate failure: ${qg.status}"
@@ -38,18 +44,31 @@ node {
             imagePrune(CONTAINER_NAME)
         }
 
+        stage('Docker sanity') {
+            
+            sh '''
+            set -euo pipefail
+            echo "PATH: $PATH"
+            echo "which docker: $(which docker || true)"
+            echo "readlink docker: $(readlink -f $(which docker) || true)"
+            /usr/bin/docker -v
+            /usr/bin/docker version
+            '''
+            
+        }
+
         stage('Image Build') {
             imageBuild(CONTAINER_NAME, CONTAINER_TAG)
         }
 
         stage('Push to Docker Registry') {
-            withCredentials([usernamePassword(credentialsId: 'DockerhubCredentials', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+            withCredentials([usernamePassword(credentialsId: 'dockerhubcredentials', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
                 pushToImage(CONTAINER_NAME, CONTAINER_TAG, USERNAME, PASSWORD)
             }
         }
 
         stage('Run App') {
-            withCredentials([usernamePassword(credentialsId: 'DockerhubCredentials', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
+            withCredentials([usernamePassword(credentialsId: 'dockerhubcredentials', usernameVariable: 'USERNAME', passwordVariable: 'PASSWORD')]) {
                 runApp(CONTAINER_NAME, CONTAINER_TAG, USERNAME, HTTP_PORT, ENV_NAME)
 
             }
@@ -70,10 +89,20 @@ def imagePrune(containerName) {
     }
 }
 
+
+//def imageBuild(containerName, tag) {
+//    sh 'docker version'          // doit afficher un client et un serveur
+//    sh "docker build -t $containerName:$tag --pull --no-cache ."
+//    echo "Image build complete"
+//}
+
+
 def imageBuild(containerName, tag) {
-    sh "docker build -t $containerName:$tag  -t $containerName --pull --no-cache ."
+    sh '/usr/bin/docker version'   // Client 26.x + API 1.45
+    sh "/usr/bin/docker build -t ${containerName}:${tag} --pull --no-cache ."
     echo "Image build complete"
 }
+
 
 def pushToImage(containerName, tag, dockerUser, dockerPassword) {
     sh "docker login -u $dockerUser -p $dockerPassword"
@@ -83,7 +112,7 @@ def pushToImage(containerName, tag, dockerUser, dockerPassword) {
 }
 
 def runApp(containerName, tag, dockerHubUser, httpPort, envName) {
-    sh "docker pull $dockerHubUser/$containerName"
+    sh "docker pull $dockerHubUser/$containerName:$tag"
     sh "docker run --rm --env SPRING_ACTIVE_PROFILES=$envName -d -p $httpPort:$httpPort --name $containerName $dockerHubUser/$containerName:$tag"
     echo "Application started on port: ${httpPort} (http)"
 }
@@ -110,7 +139,7 @@ String getHTTPPort(String branchName) {
 }
 
 String getTag(String buildNumber, String branchName) {
-    if (branchName == 'main') {
+    if (branchName != 'main') {
         return buildNumber + '-unstable'
     }
     return buildNumber + '-stable'

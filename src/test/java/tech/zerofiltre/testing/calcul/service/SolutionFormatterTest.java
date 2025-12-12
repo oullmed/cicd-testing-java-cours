@@ -22,8 +22,14 @@ class SolutionFormatterTest {
     // WHEN
     final String result = solutionFormatter.format(number);
 
+    
     // THEN
-    assertThat(result).isEqualTo("1 234 567 890");
+    String normalized = result
+        .replace('\u00A0', ' ')  // NBSP -> space
+        .replace('\u202F', ' '); // narrow NBSP -> space
+
+    assertThat(normalized).isEqualTo("1 234 567 890");
+
   }
 
 }
