@@ -4,7 +4,6 @@ def CONTAINER_TAG = getTag(env.BUILD_NUMBER, env.BRANCH_NAME)
 def HTTP_PORT = getHTTPPort(env.BRANCH_NAME)
 def EMAIL_RECIPIENTS = "oullmedacademy1@gmail.com"
 
-
 node {
     try {
         stage('Initialize') {
