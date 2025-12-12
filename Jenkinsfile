@@ -10,7 +10,7 @@ node {
         stage('Initialize') {
             def dockerHome = tool 'DockerLatest'
             def mavenHome = tool 'MavenLatest'
-            env.PATH = "${dockerHome}/bin:${mavenHome}/bin:${env.PATH}"
+            env.PATH = "/usr/bin:/bin:${env.PATH}:${mavenHome}/bin"
         }
 
         stage('Checkout') {
@@ -46,16 +46,16 @@ node {
         }
 
         stage('Docker sanity') {
-            steps {
-                sh '''
-                set -euo pipefail
-                echo "PATH: $PATH"
-                echo "which docker: $(which docker || true)"
-                echo "readlink docker: $(readlink -f $(which docker) || true)"
-                /usr/bin/docker -v
-                /usr/bin/docker version
-                '''
-            }
+            
+            sh '''
+            set -euo pipefail
+            echo "PATH: $PATH"
+            echo "which docker: $(which docker || true)"
+            echo "readlink docker: $(readlink -f $(which docker) || true)"
+            /usr/bin/docker -v
+            /usr/bin/docker version
+            '''
+            
         }
 
         stage('Image Build') {
