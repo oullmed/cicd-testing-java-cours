@@ -45,6 +45,19 @@ node {
             imagePrune(CONTAINER_NAME)
         }
 
+        stage('Docker sanity') {
+            steps {
+                sh '''
+                set -euo pipefail
+                echo "PATH: $PATH"
+                echo "which docker: $(which docker || true)"
+                echo "readlink docker: $(readlink -f $(which docker) || true)"
+                /usr/bin/docker -v
+                /usr/bin/docker version
+                '''
+            }
+        }
+
         stage('Image Build') {
             imageBuild(CONTAINER_NAME, CONTAINER_TAG)
         }
@@ -77,11 +90,20 @@ def imagePrune(containerName) {
     }
 }
 
+
+//def imageBuild(containerName, tag) {
+//    sh 'docker version'          // doit afficher un client et un serveur
+//    sh "docker build -t $containerName:$tag --pull --no-cache ."
+//    echo "Image build complete"
+//}
+
+
 def imageBuild(containerName, tag) {
-    sh 'docker version'          // doit afficher un client et un serveur
-    sh "docker build -t $containerName:$tag --pull --no-cache ."
+    sh '/usr/bin/docker version'   // Client 26.x + API 1.45
+    sh "/usr/bin/docker build -t ${containerName}:${tag} --pull --no-cache ."
     echo "Image build complete"
 }
+
 
 def pushToImage(containerName, tag, dockerUser, dockerPassword) {
     sh "docker login -u $dockerUser -p $dockerPassword"
